@@ -14,7 +14,7 @@ dw = 2*pi*p1/N;
 w1 = 0.25*pi;
 w2 = w1 + dw;
 
-x = sin(w1*n) + 0.01*sin(w2*n);
+x = sin(w1*n) + 0.001*sin(w2*n);
 
 w = ones(1,N);  % rectangular
 
@@ -39,12 +39,12 @@ title('Rectangular Window - Coherent');
 % CASE 2: Rectangular - Noncoherent
 % =========================
 
-p2 = 700; %If lower the required +-0.5dB will be missed
+p2 = 4000; %Cant achieve the desired -60dB with +-0.5 dB.
 dw = 2*pi*p2/N;
 w1 = (0.25 + 1/N)*pi;
 w2 = w1 + dw;
 
-x = sin(w1*n) + 0.01*sin(w2*n);
+x = sin(w1*n) + 0.001*sin(w2*n);
 
 w = ones(1,N);  % rectangular
 
@@ -58,7 +58,7 @@ X_dB = 20*log10(X_mag);
 
 figure;
 plot(X_dB);
-xlim([0 3000]);
+xlim([0 6000]);
 ylim([-100 0]);
 xlabel('Frequency bin k');
 ylabel('Magnitude (dB)');
@@ -74,7 +74,7 @@ dw = 2*pi*p3/N;
 w1 = 0.25*pi;
 w2 = w1 + dw;
 
-x = sin(w1*n) + 0.01*sin(w2*n);
+x = sin(w1*n) + 0.001*sin(w2*n);
 
 w = blackmanharris(N)';
 
@@ -105,7 +105,7 @@ dw = 2*pi*p4/N;
 w1 = (0.25 + 1/N)*pi;
 w2 = w1 + dw;
 
-x = sin(w1*n) + 0.01*sin(w2*n);
+x = sin(w1*n) + 0.001*sin(w2*n);
 
 w = blackmanharris(N)';
 

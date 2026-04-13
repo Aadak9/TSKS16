@@ -1,0 +1,22 @@
+function y = AGCunity(x)
+% AGCUNITY Scales input signal to full-scale range [-1, 1]
+%   y = AGCunity(x) normalizes the input vector x so that
+%   the maximum absolute value of y is 1.
+
+    % Ensure x is not empty
+    if isempty(x)
+        y = x;
+        return;
+    end
+
+    % Find maximum absolute value
+    max_val = max(abs(x));
+
+    % Avoid division by zero
+    if max_val == 0
+        y = x;
+    else
+        % Normalize signal
+        y = x / max_val;
+    end
+end

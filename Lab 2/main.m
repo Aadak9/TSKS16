@@ -1,0 +1,182 @@
+clc; clear; close all;
+
+%% =========================
+% PARAMETERS
+%% =========================
+Bvals = [1 2 4 8 16];
+
+%% =========================
+% PART 1: HISTOGRAMS OF QUANTIZATION ERROR
+%% =========================
+N = 2^20;
+
+p = 7;%A prime is choosen here so the 
+n = 0:N-1;
+w1T = 2*pi*p/N;
+
+signals1 = {
+    randn(1,N)
+    rand(1,N) - 0.5
+    cos(w1T*n)
+    cos(0.25*pi*n)
+};
+
+titles1 = {
+    'Gaussian noise'
+    'Uniform noise'
+    'Cosine (prime frequency)'
+    'Cosine (0.25\pi)'
+};
+
+for s = 1:length(signals1)
+
+    x = AGCunity(signals1{s});
+
+    figure('Name', titles1{s});
+
+    for i = 1:length(Bvals)
+
+        xq = quant(x, Bvals(i));
+        e = xq - x;
+
+        subplot(2,3,i)
+        histogram(e, 100, 'Normalization', 'pdf')
+        title(['B = ' num2str(Bvals(i))])
+        xlabel('Error'); ylabel('PDF')
+
+    end
+end
+
+%% =========================
+% PART 2: SNR VS N
+%% =========================
+B = 16;
+Nvals = round(logspace(2,5,50));
+SNR_theory = 6.02*B + 1.76;
+
+signals2 = {
+    @(n) cos(0.5*sqrt(3)*pi*n)  'cos(0.5√3πn)'
+    @(n) cos(0.25*pi*n)         'cos(0.25πn)'
+    @(n) cos(0.5*pi*n)          'cos(0.5πn)'
+};
+
+figure;
+
+for s = 1:size(signals2,1)
+
+    f = signals2{s,1};
+    name = signals2{s,2};
+
+    SNR_vals = zeros(size(Nvals));
+
+    for k = 1:length(Nvals)
+
+        N = Nvals(k);
+        n = 0:N-1;
+
+        x = AGCunity(f(n));
+        e = quant(x,B) - x;
+
+        SNR_vals(k) = 10*log10(sum(x.^2)/sum(e.^2));
+    end
+
+    subplot(3,1,s)
+    semilogx(Nvals, SNR_vals, 'LineWidth', 1.5); hold on;
+    yline(SNR_theory, '--');
+
+    title(['SNR vs N: ' name]);
+    ylabel('SNR (dB)');
+    legend('Measured','Theory','Location','bestoutside');
+    grid on;
+
+end
+
+xlabel('N')
+
+%% =========================
+% PART 3: SPECTRUM ANALYSIS (WINDOWING)
+%% =========================
+N = 8192;
+B = 16;
+
+n = 0:N-1;
+f = (0:N-1)/N;
+
+w_coherent    = 0.25*pi;
+w_noncoherent = (0.25 + 1/N)*pi;
+
+signals3 = {
+    w_coherent    'Coherent'
+    w_noncoherent 'Noncoherent'
+};
+
+windows = {
+    rectwin(N)        'Rectangular'
+    blackmanharris(N) 'Blackman-Harris'
+};
+
+figure;
+
+plot_idx = 1;
+
+for s = 1:2
+
+    x = AGCunity(cos(signals3{s,1}*n));
+    xq = quant(x,B);
+
+    for w = 1:2
+
+        xw = xq .* windows{w,1}';
+
+        X = fft(xw,N);
+        mag = 20*log10(2*abs(X)/N + eps);
+
+        subplot(2,2,plot_idx)
+        plot(f(1:N/2), mag(1:N/2), 'LineWidth', 1.2);
+        grid on;
+
+        title([signals3{s,2} ' - ' windows{w,2}]);
+        xlabel('Normalized Frequency');
+        ylabel('Magnitude (dB)');
+
+        plot_idx = plot_idx + 1;
+    end
+end
+
+%% =========================
+% PART 4: FFT LENGTH COMPARISON
+%% =========================
+B = 16;
+N1 = 8192;
+N2 = 16*N1;
+
+Ns = [N1 N2];
+
+figure;
+
+for i = 1:2
+
+    N = Ns(i);
+    n = 0:N-1;
+
+    x = AGCunity(cos(0.5*sqrt(3)*pi*n));
+    xq = quant(x,B);
+
+    xw = xq .* blackmanharris(N)';
+
+    X = fft(xw,N);
+    mag = 20*log10(abs(X)+eps);
+    mag = mag - max(mag);
+
+    f = (0:N/2-1)/N;
+
+    subplot(2,1,i)
+    plot(f, mag(1:N/2), 'LineWidth', 1.2);
+    grid on;
+
+    title(['N = ' num2str(N)]);
+    xlabel('Normalized Frequency');
+    ylabel('Magnitude (dB)');
+    ylim([-120 5]);
+
+end

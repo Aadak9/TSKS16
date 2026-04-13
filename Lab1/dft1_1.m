@@ -3,124 +3,98 @@ clear; clc; close all;
 N = 8192;
 n = 0:N-1;
 
+w_axis = (0:N-1)*(2*pi/N);
 
-p1 = 2;  % you can change this value
+A_list = [0.01 0.001];   % two amplitudes 
 
-dw = 2*pi*p1/N;
+w_rect = ones(1,N);
+w_bh = blackmanharris(N)';
 
-% =========================
-% CASE 1: Rectangular - Coherent
-% =========================
-w1 = 0.25*pi;
-w2 = w1 + dw;
+w1_base = 0.25*pi;
 
-x = sin(w1*n) + 0.01*sin(w2*n);
+%% ============================================================
 
-w = ones(1,N);  % rectangular
+%% ============================================================
+for aIdx = 1:length(A_list)
 
-xw = x .* w;
+    A2 = A_list(aIdx);
 
-X = fft(xw);
+    figure;
 
-X_mag = abs(X);
-X_mag = X_mag / max(X_mag);
-X_dB = 20*log10(X_mag);
+    %% =========================
+    % CASE 1: RECT - COHERENT
+    %% =========================
+    p = 2;
+    dw = 2*pi*p/N;
 
-figure;
-plot(X_dB);
-xlim([0 1500]);
-ylim([-300 0]);
-xlabel('Frequency bin k');
-ylabel('Magnitude (dB)');
-title('Rectangular Window - Coherent');
-%}
+    w1 = w1_base;
+    w2 = w1 + dw;
 
-% =========================
-% CASE 2: Rectangular - Noncoherent
-% =========================
+    x = sin(w1*n) + A2*sin(w2*n);
 
-p2 = 700; %If lower the required +-0.5dB will be missed
-dw = 2*pi*p2/N;
-w1 = (0.25 + 1/N)*pi;
-w2 = w1 + dw;
+    X = fft(x .* w_rect);
+    X = 20*log10(abs(X)/max(abs(X)));
 
-x = sin(w1*n) + 0.01*sin(w2*n);
+    subplot(2,2,1);
+    plot(w_axis/pi, X);
+    title(['Rect Coherent, A = ', num2str(A2)]);
+    xlabel('\omega/\pi'); ylabel('dB'); grid on;
 
-w = ones(1,N);  % rectangular
+    %% =========================
+    % CASE 2: RECT - NONCOHERENT
+    %% =========================
+    p = 700;
+    dw = 2*pi*p/N;
 
-xw = x .* w;
+    w1 = (0.25 + 1/N)*pi;
+    w2 = w1 + dw;
 
-X = fft(xw);
+    x = sin(w1*n) + A2*sin(w2*n);
 
-X_mag = abs(X);
-X_mag = X_mag / max(X_mag);
-X_dB = 20*log10(X_mag);
+    X = fft(x .* w_rect);
+    X = 20*log10(abs(X)/max(abs(X)));
 
-figure;
-plot(X_dB);
-xlim([0 3000]);
-ylim([-100 0]);
-xlabel('Frequency bin k');
-ylabel('Magnitude (dB)');
-title('Rectangular Window - Noncoherent');
-%}
+    subplot(2,2,2);
+    plot(w_axis/pi, X);
+    title(['Rect Noncoherent, A = ', num2str(A2)]);
+    xlabel('\omega/\pi'); ylabel('dB'); grid on;
 
+    %% =========================
+    % CASE 3: BH - COHERENT
+    %% =========================
+    p = 5;
+    dw = 2*pi*p/N;
 
-% =========================
-% CASE 3: Blackman-Harris - Coherent
-% =========================
-p3 = 5;
-dw = 2*pi*p3/N;
-w1 = 0.25*pi;
-w2 = w1 + dw;
+    w1 = w1_base;
+    w2 = w1 + dw;
 
-x = sin(w1*n) + 0.01*sin(w2*n);
+    x = sin(w1*n) + A2*sin(w2*n);
 
-w = blackmanharris(N)';
+    X = fft(x .* w_bh);
+    X = 20*log10(abs(X)/max(abs(X)));
 
-xw = x .* w;
+    subplot(2,2,3);
+    plot(w_axis/pi, X);
+    title(['BH Coherent, A = ', num2str(A2)]);
+    xlabel('\omega/\pi'); ylabel('dB'); grid on;
 
-X = fft(xw);
+    %% =========================
+    % CASE 4: BH - NONCOHERENT
+    %% =========================
+    p = 5;
+    dw = 2*pi*p/N;
 
-X_mag = abs(X);
-X_mag = X_mag / max(X_mag);
-X_dB = 20*log10(X_mag);
+    w1 = (0.25 + 1/N)*pi;
+    w2 = w1 + dw;
 
-figure;
-plot(X_dB);
-xlim([0 2000]);
-ylim([-250 0]);
-xlabel('Frequency bin k');
-ylabel('Magnitude (dB)');
-title('Blackman-Harris Window - Coherent');
-%}
+    x = sin(w1*n) + A2*sin(w2*n);
 
-%
-% =========================
-% CASE 4: Blackman-Harris - Noncoherent
-% =========================
+    X = fft(x .* w_bh);
+    X = 20*log10(abs(X)/max(abs(X)));
 
-p4 = 5;
-dw = 2*pi*p4/N;
-w1 = (0.25 + 1/N)*pi;
-w2 = w1 + dw;
+    subplot(2,2,4);
+    plot(w_axis/pi, X);
+    title(['BH Noncoherent, A = ', num2str(A2)]);
+    xlabel('\omega/\pi'); ylabel('dB'); grid on;
 
-x = sin(w1*n) + 0.01*sin(w2*n);
-
-w = blackmanharris(N)';
-
-xw = x .* w;
-
-X = fft(xw);
-
-X_mag = abs(X);
-X_mag = X_mag / max(X_mag);
-X_dB = 20*log10(X_mag);
-
-figure;
-plot(X_dB);
-xlim([0 1500]);
-ylim([-300 0]);
-xlabel('Frequency bin k');
-ylabel('Magnitude (dB)');
-title('Blackman-Harris Window - Noncoherent');
+end

@@ -1,13 +1,13 @@
 clc; clear; close all;
 
-%% =========================
-% PARAMETERS
-%% =========================
+
+%% PARAMETERS
+
 Bvals = [1 2 4 8 16];
 
-%% =========================
-% PART 1: HISTOGRAMS OF QUANTIZATION ERROR
-%% =========================
+
+%% PART 1: HISTOGRAMS OF QUANTIZATION ERROR
+
 N = 2^20;
 
 p = 7;%A prime is choosen here so the 
@@ -47,9 +47,9 @@ for s = 1:length(signals1)
     end
 end
 
-%% =========================
-% PART 2: SNR VS N
-%% =========================
+
+%% PART 2: SNR VS N
+
 B = 16;
 Nvals = round(logspace(2,5,50));
 SNR_theory = 6.02*B + 1.76;
@@ -81,7 +81,8 @@ for s = 1:size(signals2,1)
     end
 
     subplot(3,1,s)
-    semilogx(Nvals, SNR_vals, 'LineWidth', 1.5); hold on;
+    semilogx(Nvals, SNR_vals, 'LineWidth', 1.5); 
+    hold on;
     yline(SNR_theory, '--');
 
     title(['SNR vs N: ' name]);
@@ -93,9 +94,9 @@ end
 
 xlabel('N')
 
-%% =========================
-% PART 3: SPECTRUM ANALYSIS (WINDOWING)
-%% =========================
+
+%% PART 3: SPECTRUM ANALYSIS WINDOWING
+
 N = 8192;
 B = 16;
 
@@ -143,9 +144,9 @@ for s = 1:2
     end
 end
 
-%% =========================
-% PART 4: FFT LENGTH COMPARISON
-%% =========================
+
+%% PART 4: FFT LENGTH COMPARISON
+
 B = 16;
 N1 = 8192;
 N2 = 16*N1;

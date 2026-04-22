@@ -8,10 +8,10 @@ function xq = quant(x, B)
     % Step size
     Q = 2^(-(B-1));
 
-    % Perform quantization (rounding to nearest level)
+    % Perform quantization, rounding to nearest level
     xq = Q * (floor(x / Q) + 0.5);
 
-    % Handle edge case at x = 1 (keep within valid range)
+    % Handle edge case at x = 1, keep within valid range
     xq(x >= 1) = 1 - Q/2;
     xq(x <= -1) = -1 + Q/2;
 end

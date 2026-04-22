@@ -1,0 +1,59 @@
+%Matlab functions: conv, downsample, fftshift, find, freqz, qammod, qamdemod,
+%rcosdesign, scatterplot, upsample.
+B1 = 5e6;
+B1_center = -5e6;
+B2 = 10e6;
+B2_center = -2.5e6;
+fs = 30e6;
+omega1 = -fs*pi/3;
+omega2 = fs*pi/6;
+A1 = 1;
+A2 = 1;
+M1 = 4;
+M2 = 8;
+L1 = 2^13;
+L2 = 2^12;
+S1 = 10;
+S2 = 10;
+rolloff1 = 1/3;
+rolloff2 = 1/3;
+
+g1=rcosdesign(rolloff1, S1, M1, 'sqrt')/sqrt(M1);
+g2 = rcosdesign(rolloff1, S2, M2, 'sqrt')/sqrt(M2);
+
+figure(1)
+
+subplot(2,1,1)
+freqz(g1, L1)
+title('Filter g1 Frequency Response')
+
+subplot(2,1,2)
+freqz(g2, L2)
+title('Filter g2 Frequency Response')
+
+
+figure(2)
+
+subplot(2,2,1)
+impz(g1.*g1)
+title('Filter g1 cascade Impulse Response')
+
+subplot(2,2,2)
+impz(g2.*g2)
+title('Filter g2 cascade Impulse Response')
+
+subplot(2,2,3)
+impz(downsample(M1*g1.*g1, M1))
+title('G1 downsampled by M1')
+
+subplot(2,2,4)
+impz(downsample(M2*g2.*g2, M2))
+title('G2 downsampled by M2')
+
+S1 = 1:40;
+S2 = 1:40;
+
+
+
+
+

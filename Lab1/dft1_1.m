@@ -12,18 +12,15 @@ w_bh = blackmanharris(N)';
 
 w1_base = 0.25*pi;
 
-%% ============================================================
-
-%% ============================================================
 for aIdx = 1:length(A_list)
 
     A2 = A_list(aIdx);
 
     figure;
 
-    %% =========================
+    
     % CASE 1: RECT - COHERENT
-    %% =========================
+    
     p = 2;
     dw = 2*pi*p/N;
 
@@ -40,9 +37,7 @@ for aIdx = 1:length(A_list)
     title(['Rect Coherent, A = ', num2str(A2)]);
     xlabel('\omega/\pi'); ylabel('dB'); grid on;
 
-    %% =========================
     % CASE 2: RECT - NONCOHERENT
-    %% =========================
     p = 700;
     dw = 2*pi*p/N;
 
@@ -59,9 +54,8 @@ for aIdx = 1:length(A_list)
     title(['Rect Noncoherent, A = ', num2str(A2)]);
     xlabel('\omega/\pi'); ylabel('dB'); grid on;
 
-    %% =========================
+
     % CASE 3: BH - COHERENT
-    %% =========================
     p = 5;
     dw = 2*pi*p/N;
 
@@ -78,9 +72,9 @@ for aIdx = 1:length(A_list)
     title(['BH Coherent, A = ', num2str(A2)]);
     xlabel('\omega/\pi'); ylabel('dB'); grid on;
 
-    %% =========================
+
     % CASE 4: BH - NONCOHERENT
-    %% =========================
+
     p = 5;
     dw = 2*pi*p/N;
 

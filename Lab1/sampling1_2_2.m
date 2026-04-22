@@ -68,7 +68,7 @@ for Delta_phase = Delta_phase_vals
         % Back to time domain
         xf = real(ifft(Xf));
 
-        % Desired reference (NO phase distortion!)
+        % Desired reference, no phase distortion
         xa1_ref = zeros(1,N);
         for k = k_vals
             f1k = fc1 + fc1*k*Delta;

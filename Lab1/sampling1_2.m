@@ -21,9 +21,9 @@ wc = 0.8125*pi*fs;
 f = (0:N-1)*(fs/N);
 omega = 2*pi*f;
 
-%% =========================
-% 1. SIDR vs P
-%% =========================
+
+%% 1. SIDR vs P
+
 
 figure;
 
@@ -68,7 +68,8 @@ for d = 1:3
 
             X = fft(x);
 
-            H = 1 ./ sqrt(1 + eps^2 * (omega./wc).^(2*P));
+            
+            H = 1 ./ sqrt(1 + eps^2 * ((omega)./wc).^(2*P));
 
             xf = real(ifft(X .* H));
 
@@ -101,7 +102,8 @@ for d = 1:3
     phi = Delta_phase_vals(d);
 
     subplot(3,1,d);
-    hold on; grid on;
+    hold on; 
+    grid on;
 
     legends = {};
 
@@ -129,7 +131,7 @@ for d = 1:3
 
         eps = sqrt(10^(0.1/10) - 1);
 
-        H = 1 ./ sqrt(1 + eps^2 * (omega - fs/2)./wc).^(2*P);
+        H = 1 ./ sqrt(1 + eps^2 * ((omega)./wc).^(2*P));
 
         xf = real(ifft(ifftshift(X .* H)));
 
@@ -151,11 +153,13 @@ for d = 1:3
     legend(legends);
 end
 
-%% =========================
-% 3. Filter response
-%% =========================
 
-figure; hold on; grid on;
+%% 3. Filter response
+
+
+figure; 
+hold on; 
+grid on;
 
 f_plot = linspace(0, fs, 3000);
 w_plot = 2*pi*f_plot;
@@ -175,3 +179,5 @@ xlabel('Hz');
 ylabel('Normalized gain');
 title('Filter response');
 legend;
+
+

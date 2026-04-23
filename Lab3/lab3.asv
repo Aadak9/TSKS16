@@ -54,41 +54,12 @@ title('G2 downsampled by M2')
 S1 = 1:40;
 S2 = 1:40;
 
-cases = [1 1;     % case 1: A1=1,   A2=1
-         1 0.1;   % case 2: A1=1,   A2=0.1
-         0.1 1];  % case 3: A1=0.1, A2=1
+case1 = [A1 = 1, A2 = 1];
+case2 = 
 
-for c = 1:size(cases,1)
-    A1 = cases(c,1);
-    A2 = cases(c,2);
 
-    for Q = [4, 64]
-        x1 = qammod(randi([0 Q-1], L1, 1)', Q);
-        x2 = qammod(randi([0 Q-1], L2, 1)', Q);
 
-        SIDR1 = zeros(1, length(S1));
-        SIDR2 = zeros(1, length(S2));
 
-        for S = S1
-
-            %In this equation, it is assumed that the delay through the filters is zero. In the
-            %implementation, there is always an integer-valued filter delay that has to be taken
-            %care of before the SIDR computations.Append zeros somewhere on
-            %the signal?
-
-            %%Transmitter
-
-            %Design filter
-            %H*G
-            %Upsample
-
-            %Transmit as a complex number?
-            %
-
-        end
-    end
-
-end
 
 
 

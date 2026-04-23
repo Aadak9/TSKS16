@@ -2,6 +2,7 @@ clear; clc; close all;
 
 N = 8192;
 n = 0:N-1;
+f = (0:N-1)/N;
 
 w_axis = (0:N-1)*(2*pi/N);
 

@@ -1,0 +1,110 @@
+clear; close all; clc;
+
+L = 2^12;
+Neq = 20;
+
+c = 0.25*exp(1i*0.1*pi)*[1 2.4 1];
+
+%% Case 1
+y_tx_1 = randn(1, L);
+y_tx_1 = y_tx_1 / sqrt(mean(abs(y_tx_1).^2));
+
+% rx
+y_rx_1 = conv(y_tx_1, c);
+y_rx_1 = awgn(y_rx_1, 30, "measured");
+
+% calc
+[h_eq_1, d_min_1, error_min_1] = fir_eq(y_tx_1, y_rx_1, Neq);
+
+fprintf("Case 1:\nd_min: %d\nerror_min: %.4e\n\n", d_min_1, error_min_1);
+
+figure;
+freqz(h_eq_1);
+title("Case 1 (White)");
+
+%% Case 2
+b = fir1(30, 0.5);
+
+y_tx_2 = randn(1, L);
+y_tx_2 = filter(b, 1, y_tx_2);
+y_tx_2 = y_tx_2 / sqrt(mean(abs(y_tx_2).^2));
+
+% rx
+y_rx_2 = conv(y_tx_2, c);
+y_rx_2 = awgn(y_rx_2, 30, "measured");
+
+% calc
+[h_eq_2, d_min_2, error_min_2] = fir_eq(y_tx_2, y_rx_2, Neq);
+
+fprintf("Case 2:\nd_min: %d\nerror_min: %.4e\n\n", d_min_2, error_min_2);
+
+figure;
+freqz(h_eq_2);
+title("Case 2 (Filtered)");
+
+%% Part 2: SNDR vs Neq
+
+Neq_range = 1:50;
+
+SNDR_1 = zeros(1, length(Neq_range));
+SNDR_2 = zeros(1, length(Neq_range));
+
+P1 = sum(abs(y_tx_1).^2);
+P2 = sum(abs(y_tx_2).^2);
+
+for i = 1:length(Neq_range)
+
+    Neq = Neq_range(i);
+
+    % Case 1
+    [~, d_min_1, error_min_1] = fir_eq(y_tx_1, y_rx_1, Neq);
+    SNDR_1(i) = 10*log10(P1 / error_min_1);
+
+    % Case 2
+    [~, d_min_2, error_min_2] = fir_eq(y_tx_2, y_rx_2, Neq);
+    SNDR_2(i) = 10*log10(P2 / error_min_2);
+
+end
+
+figure;
+plot(Neq_range, SNDR_1, 'r', 'LineWidth', 1.5); hold on;
+plot(Neq_range, SNDR_2, 'b', 'LineWidth', 1.5);
+grid on;
+xlabel('N_{eq}');
+ylabel('SNDR (dB)');
+legend('White input','Filtered input');
+title('SNDR vs Equalizer Order');
+
+%% 
+function [h_eq, d_min, error_min] = fir_eq(y_tx, y_rx, Neq)
+
+L = length(y_tx);
+
+d_min = 0;
+error_min = Inf;
+
+for d = 0:Neq
+
+    y_des = [zeros(1,d), y_tx(1:L-d)];
+    y_des = y_des(:);
+
+    col = y_rx(:);
+    row = [y_rx(1) zeros(1,Neq)];
+
+    A = toeplitz(col, row);
+    A = A(1:L, :);
+
+    h_tmp = (A' * A) \ (A' * y_des);
+
+    y_eq = A * h_tmp;
+
+    err = sum(abs(y_eq - y_des).^2);
+
+    if err < error_min
+        error_min = err;
+        h_eq = h_tmp;
+        d_min = d;
+    end
+end
+
+end

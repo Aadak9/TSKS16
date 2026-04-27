@@ -175,5 +175,106 @@ for c = 1:size(cases,1)
     end
 end
 
+%% --- A1 = 1, S1 = S2 = 20, A2 sweep 
 
+A1 = 1;
+S1 = 20;
+S2 = 20;
 
+A2_vec = logspace(0, -6, 120);
+
+figure;
+hold on;
+grid on;
+set(gca,'XScale','log');
+
+for Q = [4, 64]
+
+    x1 = qammod(randi([0 Q-1], L1, 1)', Q);
+    x2 = qammod(randi([0 Q-1], L2, 1)', Q);
+
+    errors_x1 = zeros(size(A2_vec));
+    errors_x2 = zeros(size(A2_vec));
+
+    for k = 1:length(A2_vec)
+
+        A2 = A2_vec(k);
+
+        
+        g1 = rcosdesign(rolloff1, S1, M1, 'sqrt')/sqrt(M1);
+        g2 = rcosdesign(rolloff2, S2, M2, 'sqrt')/sqrt(M2);
+
+        H1 = M1*g1;
+        H2 = M2*g2;
+
+        %Transmitter 
+        x1_transmit = upsample(x1, M1);
+        x2_transmit = upsample(x2, M2);
+
+        x1_transmit = conv(x1_transmit, H1);
+        x2_transmit = conv(x2_transmit, H2);
+
+        x1_transmit = x1_transmit .* A1;
+        x2_transmit = x2_transmit .* A2;
+
+        n1 = 1:length(x1_transmit);
+        n2 = 1:length(x2_transmit);
+
+        x1_transmit = x1_transmit .* exp(1j * n1 * w1 / fs);
+        x2_transmit = x2_transmit .* exp(1j * n2 * w2 / fs);
+
+        num_of_zeros = length(x2_transmit) - length(x1_transmit);
+
+        if num_of_zeros > 0
+            x1_transmit = [x1_transmit zeros(1, num_of_zeros)];
+        elseif num_of_zeros < 0
+            x2_transmit = [x2_transmit zeros(1, -num_of_zeros)];
+        end
+
+        y_tx = x1_transmit + x2_transmit;
+
+        % Receiver x1
+        n = 1:length(y_tx);
+
+        x1_received = y_tx .* exp(-1j * n * w1 / fs);
+        x1_received = conv(x1_received, g1);
+        x1_received = downsample(x1_received, M1);
+        x1_received = x1_received .* 1/A1;
+
+        x1_est = x1_received(S1+1:end-2*S1);
+
+        % Receiver x2
+        x2_received = y_tx .* exp(-1j * n * w2 / fs);
+        x2_received = conv(x2_received, g2);
+        x2_received = downsample(x2_received, M2);
+        x2_received = x2_received .* 1/A2;
+
+        x2_est = x2_received(S2+1:end-S2);
+
+        
+        L = min([length(x1_est), length(x1), length(x2_est), length(x2)]);
+
+        errors_x1(k) = sum(qamdemod(x1(1:L),Q) ~= qamdemod(x1_est(1:L),Q));
+        errors_x2(k) = sum(qamdemod(x2(1:L),Q) ~= qamdemod(x2_est(1:L),Q));
+
+    end
+
+    %Threshold detection 
+    idx = find(errors_x1 == 0 & errors_x2 == 0, 1, 'last');
+
+    if isempty(idx)
+        fprintf('Q = %d: No error-free A2 found\n', Q);
+    else
+        fprintf('Q = %d: Smallest A2 ≈ %.5g\n', Q, A2_vec(idx));
+    end
+
+    semilogx(A2_vec, errors_x1, '-o');
+    semilogx(A2_vec, errors_x2, '-x');
+
+end
+
+xlabel('A2');
+ylabel('Symbol Errors');
+title('A1 = 1, S1 = S2 = 20');
+
+legend('x1 (Q=4)','x2 (Q=4)','x1 (Q=64)','x2 (Q=64)');

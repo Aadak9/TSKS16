@@ -111,7 +111,8 @@ w_noncoherent = (0.25 + 1/N)*pi;
 
 colors = lines(4);
 
-figure; hold on;
+figure; 
+hold on;
 
 
 % Rectangular window

@@ -1,200 +1,197 @@
-clear; close all; clc;
+clear; clc; close all;
 
 %% PARAMETERS
 
 L1 = 2^13;
 L2 = 2^12;
 
-M  = 100;
+M = 100;
 fs = 30e6;
-fc = 350e6;
 
 rolloff = 1/3;
-S  = 10;
+S = 5;
 
-Q  = 64;
+Q = 64;
 
 M1 = 4;
 M2 = 8;
 
 omega1 = -pi/3;
-omega2 =  pi/6;
+omega2 = pi/6;
 
-wc = 2*pi*fc/(M*fs);
+SNR_test = 5:20;
 
-%% SIGNAL GENERATION
+c = 0.25*exp(1i*0.1*pi)*[1 zeros(1,15) 2.4 zeros(1,15) 1];
+
+SINDR_x1 = zeros(1,length(SNR_test));
+SINDR_x2 = zeros(1,length(SNR_test));
+
+%% SIGNALS
 
 x1 = qammod(randi([0 Q-1], L1, 1), Q).';
 x2 = qammod(randi([0 Q-1], L2, 1), Q).';
 
 %% FILTERS
 
-G1  = rcosdesign(rolloff, S, M1, 'sqrt') / sqrt(M1);
-G2  = rcosdesign(rolloff, S, M2, 'sqrt') / sqrt(M2);
+G1 = rcosdesign(rolloff, S, M1, "sqrt")/sqrt(M1);
+G2 = rcosdesign(rolloff, S, M2, "sqrt")/sqrt(M2);
 
-H1  = M1 * G1;
-H2  = M2 * G2;
+H1 = M1*G1;
+H2 = M2*G2;
 
-Glp = rcosdesign(rolloff, S, M, 'sqrt') / sqrt(M);
-Hlp = M * Glp;
+G_lp = rcosdesign(rolloff, S, M, "sqrt")/sqrt(M);
+H_lp = M*G_lp;
 
 %% TRANSMITTER
 
-x1_up = upsample(x1, M1);
-x1_filt = conv(x1_up, H1);
-n1 = 0:length(x1_filt)-1;
-x1_mod = x1_filt .* exp(1j * omega1 * n1);
+x1_tx = upsample(x1, M1);
+x1_tx = conv(x1_tx, H1);
+x1_tx = x1_tx .* exp(1i*omega1*(0:length(x1_tx)-1));
 
-x2_up = upsample(x2, M2);
-x2_filt = conv(x2_up, H2);
-n2 = 0:length(x2_filt)-1;
-x2_mod = x2_filt .* exp(1j * omega2 * n2);
+x2_tx = upsample(x2, M2);
+x2_tx = conv(x2_tx, H2);
+x2_tx = x2_tx .* exp(1i*omega2*(0:length(x2_tx)-1));
 
-N = max(length(x1_mod), length(x2_mod));
-x1_mod = [x1_mod zeros(1, N-length(x1_mod))];
-x2_mod = [x2_mod zeros(1, N-length(x2_mod))];
+L = max(length(x1_tx), length(x2_tx));
 
-y_tx = x1_mod + x2_mod;
+x1_tx = [x1_tx zeros(1,L-length(x1_tx))];
+x2_tx = [x2_tx zeros(1,L-length(x2_tx))];
 
-%% ZERO-IF SYSTEM
+y_tx = x1_tx + x2_tx;
 
-y1 = conv(y_tx, Hlp);
+y_tx_if = y_tx;   % keep for spectrum
 
-n = 0:length(y1)-1;
-y2 = y1 .* exp(1j * wc * n);
+%% TX SPECTRUM (PLOT 1)
 
-y3 = real(y2);
+figure;
+pwelch(y_tx_if,[],[],[],fs*M);
+title('Transmit Spectrum y_{tx}');
+grid on;
 
-%% CHANNEL
+%% ZERO-IF + CHANNEL
 
-c = 0.25*exp(1j*0.1*pi)*[1 zeros(1,15) 2.4 zeros(1,15) 1];
-y4 = conv(y3, c);
+y = upsample(y_tx, M);
+y = conv(y, H_lp);
 
-%% RECEIVER FRONTEND
+y = y .* (sqrt(2)*exp(1i*(0:length(y)-1)*0.1));
 
-y5 = conv(y4, Glp);
+y = real(y);
 
-n = 0:length(y5)-1;
-y_rx = y5 .* exp(-1j * wc * n);
+y = conv(y, c);
 
-%% DELAY COMPENSATION
+y_rx0 = y;
 
-delay = S*M;
-y_rx = y_rx(delay+1:end);
+%% CHANNEL SPECTRUM (PLOT 2)
 
-L_eq = min(length(y_tx), length(y_rx));
-y_tx_eq = y_tx(1:L_eq);
-y_rx_eq = y_rx(1:L_eq);
+figure;
+pwelch(y_rx0,[],[],[],fs*M);
+title('Channel Output Spectrum');
+grid on;
 
-%% EQUALIZER SWEEP
+%% EQUALIZER + SNR LOOP
 
-orders = 0:10;
-SINDR1_vec = zeros(size(orders));
-SINDR2_vec = zeros(size(orders));
+for idx = 1:length(SNR_test)
 
-for k = 1:length(orders)
+    SNR = SNR_test(idx);
 
-    Neq = orders(k);
+    y_rx = awgn(y_rx0, SNR, "measured");
 
-    [h_eq, d_min, ~] = fir_eq(y_tx_eq, y_rx_eq, Neq);
+    y_rx = y_rx .* (sqrt(2)*exp(-1i*(0:length(y_rx)-1)*0.1));
 
-    y_rxeq = conv(y_rx, h_eq.');
-    y_rxeq = y_rxeq(d_min+1 : d_min + length(y_rx));
+    y_rx = conv(y_rx, G_lp);
+    y_rx = downsample(y_rx, M);
+    y_rx = y_rx(S+1:end-S);
+
+    y_tx_ext = [y_tx zeros(1,length(y_rx)-length(y_tx))];
+
+    [h_eq, d_min, ~, y_rx_eq] = eq(y_tx_ext, y_rx, M);
+
+    y_rx_eq = y_rx_eq(d_min+1:d_min+length(y_tx));
 
     %% RECEIVER
 
-    n = 0:length(y_rxeq)-1;
+    x1_rx = y_rx_eq .* exp(-1i*omega1*(0:length(y_rx_eq)-1));
+    x1_rx = conv(x1_rx, G1);
+    x1_rx = downsample(x1_rx, M1);
 
-    y1_rx = y_rxeq .* exp(-1j * omega1 * n);
-    y2_rx = y_rxeq .* exp(-1j * omega2 * n);
-
-    z1 = conv(y1_rx, G1);
-    z2 = conv(y2_rx, G2);
-
-    z1 = z1(S*M1/2+1 : M1 : end);
-    z2 = z2(S*M2/2+1 : M2 : end);
+    x2_rx = y_rx_eq .* exp(-1i*omega2*(0:length(y_rx_eq)-1));
+    x2_rx = conv(x2_rx, G2);
+    x2_rx = downsample(x2_rx, M2);
 
     guard = S;
 
-    x1_est = z1(guard+1 : guard+L1);
-    x2_est = z2(guard+1 : guard+L2);
+    x1_est = x1_rx(guard+1:guard+L1);
+    x2_est = x2_rx(guard+1:guard+L2);
 
-    SINDR1_vec(k) = 10*log10(sum(abs(x1).^2) / sum(abs(x1_est - x1).^2));
-    SINDR2_vec(k) = 10*log10(sum(abs(x2).^2) / sum(abs(x2_est - x2).^2));
+    SINDR_x1(idx) = 10*log10(sum(abs(x1).^2)/sum(abs(x1_est-x1).^2));
+    SINDR_x2(idx) = 10*log10(sum(abs(x2).^2)/sum(abs(x2_est-x2).^2));
+
 end
 
 %% RESULTS
 
 figure;
-plot(orders, SINDR1_vec, '-o', orders, SINDR2_vec, '-x');
-xlabel('Equalizer order');
-ylabel('SINDR (dB)');
-legend('Channel 1','Channel 2');
-title('SINDR vs Equalizer Order');
+
+subplot(2,1,1);
+hold on; 
 grid on;
+scatter(real(x1_est), imag(x1_est), 10, 'r', 'filled');
+scatter(real(x1), imag(x1), 20, 'k', 'filled');
+axis equal;
+legend('x1','x1 est');
+title('x1 Constellation');
 
-%% BEST CASE CONSTELLATIONS
+subplot(2,1,2);
+hold on; 
+grid on;
+scatter(real(x2_est), imag(x2_est), 10, 'r', 'filled');
+scatter(real(x2), imag(x2), 20, 'k', 'filled');
+axis equal;
+legend('x2','x2 est');
+title('x2 Constellation');
 
-[h_eq, d_min, ~] = fir_eq(y_tx_eq, y_rx_eq, 10);
-
-y_rxeq = conv(y_rx, h_eq.');
-y_rxeq = y_rxeq(d_min+1 : d_min + length(y_rx));
-
-n = 0:length(y_rxeq)-1;
-
-y1_rx = y_rxeq .* exp(-1j * omega1 * n);
-y2_rx = y_rxeq .* exp(-1j * omega2 * n);
-
-z1 = conv(y1_rx, G1);
-z2 = conv(y2_rx, G2);
-
-z1 = z1(S*M1/2+1 : M1 : end);
-z2 = z2(S*M2/2+1 : M2 : end);
-
-x1_est = z1(guard+1 : guard+L1);
-x2_est = z2(guard+1 : guard+L2);
+%% SINDR PLOT (PLOT 3)
 
 figure;
-scatterplot(x1_est);
-title('x1 after equalization');
+plot(SNR_test, SINDR_x1); 
+hold on;
+plot(SNR_test, SINDR_x2);
+grid on;
+legend('x1','x2');
+title('SINDR vs SNR');
+xlabel('SNR (dB)');
+ylabel('SINDR (dB)');
 
-figure;
-scatterplot(x2_est);
-title('x2 after equalization');
+%% EQUALIZER FUNCTION
 
-%% EQUALIZER FUNCTION (UNCHANGED)
-
-function [h_eq, d_min, error_min] = fir_eq(y_tx, y_rx, Neq)
+function [h_eq, d_min, error_min, y_rx_eq] = eq(y_tx, y_rx, N_eq)
 
 L = length(y_tx);
 
 d_min = 0;
 error_min = Inf;
 
-for d = 0:Neq
+col = [y_rx zeros(1,N_eq)];
+row = [y_rx(1) zeros(1,N_eq)];
 
-    y_des = [zeros(1,d), y_tx(1:L-d)];
-    y_des = y_des(:);
+A = toeplitz(col,row);
+B = inv(A'*A)*A';
 
-    col = y_rx(:);
-    row = [y_rx(1) zeros(1,Neq)];
+for d = 0:N_eq
 
-    A = toeplitz(col, row);
-    A = A(1:L, :);
+    y_tx_d = [zeros(1,d) y_tx zeros(1,N_eq-d)];
+    h_eq_tmp = B*y_tx_d.';
 
-    h_tmp = (A' * A) \ (A' * y_des);
+    y_rx_eq_tmp = (A*h_eq_tmp).';
 
-    y_eq = A * h_tmp;
-
-    err = sum(abs(y_eq - y_des).^2);
+    err = sum(abs(y_rx_eq_tmp - y_tx_d).^2);
 
     if err < error_min
         error_min = err;
-        h_eq = h_tmp;
+        h_eq = h_eq_tmp;
         d_min = d;
+        y_rx_eq = y_rx_eq_tmp;
     end
 end
 
 end
-
-

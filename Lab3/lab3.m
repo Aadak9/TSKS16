@@ -1,66 +1,46 @@
-%Matlab functions: conv, downsample, fftshift, find, freqz, qammod, qamdemod,
-%rcosdesign, scatterplot, upsample.
-B1 = 5e6;
-B1_center = -5e6;
-B2 = 10e6;
-B2_center = -2.5e6;
-fs = 30e6;
-w1 = -fs*pi/3;
-w2 = fs*pi/6;
-A1 = 1;
-A2 = 1;
-M1 = 4;
-M2 = 8;
-L1 = 2^13;
-L2 = 2^12;
-S1 = 10;
-S2 = 10;
+clear; close all;
+
+%% Parameters (from lab text)
 rolloff1 = 1/3;
 rolloff2 = 1/3;
 
-g1=rcosdesign(rolloff1, S1, M1, 'sqrt')/sqrt(M1);
-g2 = rcosdesign(rolloff1, S2, M2, 'sqrt')/sqrt(M2);
+M1 = 4;
+M2 = 8;
 
-figure(1)
+L1 = 2^13;
+L2 = 2^12;
 
-freqz(g1, L1); 
-hold on;
-freqz(g2, L2);
-legend("g1", "g2");
+fs = 30e6;
+omega1 = -pi/3;
+omega2 = pi/6;
 
-
-figure(2)
-
-subplot(2,2,1)
-impz(g1.*g1)
-title('Filter g1 cascade Impulse Response')
-
-subplot(2,2,2)
-impz(g2.*g2)
-title('Filter g2 cascade Impulse Response')
-
-subplot(2,2,3)
-impz(downsample(M1*g1.*g1, M1))
-title('G1 downsampled by M1')
-
-subplot(2,2,4)
-impz(downsample(M2*g2.*g2, M2))
-title('G2 downsampled by M2')
-
-%%
 S1 = 1:40;
-S2 = 1:40;
 
-cases = [1 1;     
-         1 0.1;   
-         0.1 1];  
+%% Initial filter check (S=10)
+G1 = rcosdesign(rolloff1, 10, M1, 'sqrt')/sqrt(M1);
+G2 = rcosdesign(rolloff2, 10, M2, 'sqrt')/sqrt(M2);
+
+figure;
+freqz(G1); hold on;
+freqz(G2);
+legend("G1","G2");
+
+figure;
+subplot(2,2,1); impz(G1.*G1); title("G1 cascaded");
+subplot(2,2,2); impz(G2.*G2); title("G2 cascaded");
+subplot(2,2,3); impz(downsample(M1*G1.*G1,M1)); title("M1G1G1 ↓M1");
+subplot(2,2,4); impz(downsample(M2*G2.*G2,M2)); title("M2G2G2 ↓M2");
+
+%% Cases A1/A2
+cases = [1 1;
+         1 0.1;
+         0.1 1];
 
 SIDR1_all = zeros(3,40);
 SIDR2_all = zeros(3,40);
-error_x1_all = zeros(3,40);
-error_x2_all = zeros(3,40);
 
-for c = 1:size(cases,1)
+for c = 1:3
+
     A1 = cases(c,1);
     A2 = cases(c,2);
 
@@ -69,212 +49,156 @@ for c = 1:size(cases,1)
         x1 = qammod(randi([0 Q-1], L1, 1)', Q);
         x2 = qammod(randi([0 Q-1], L2, 1)', Q);
 
-        SIDR1 = zeros(1, length(S1));
-        SIDR2 = zeros(1, length(S2));
-
-        error_x1 = zeros(1, length(S1));
-        error_x2 = zeros(1, length(S2));
+        SIDR1 = zeros(1,40);
+        SIDR2 = zeros(1,40);
+        err1 = zeros(1,40);
+        err2 = zeros(1,40);
 
         for S = S1
 
-            % Transmitter
-            g1 = rcosdesign(rolloff1, S, M1, 'sqrt')/sqrt(M1);
-            g2 = rcosdesign(rolloff1, S, M2, 'sqrt')/sqrt(M2);
-            H1 = M1*g1;
-            H2 = M2*g2;
+            %% Filters
+            G1 = rcosdesign(rolloff1, S, M1, 'sqrt')/sqrt(M1);
+            G2 = rcosdesign(rolloff2, S, M2, 'sqrt')/sqrt(M2);
 
-            x1_transmit = upsample(x1, M1);
-            x2_transmit = upsample(x2, M2);
+            H1 = M1*G1;
+            H2 = M2*G2;
 
-            x1_transmit = conv(x1_transmit, H1);
-            x2_transmit = conv(x2_transmit, H2);
+            %% TX
+            x1_tx = upsample(x1, M1);
+            x1_tx = conv(x1_tx, H1) .* A1;
+            n1_up = 1:length(x1_tx);
+            x1_tx = x1_tx .* exp(1i*omega1*n1_up);
 
-            x1_transmit = x1_transmit .* A1;
-            x2_transmit = x2_transmit .* A2;
+            x2_tx = upsample(x2, M2);
+            x2_tx = conv(x2_tx, H2) * A2;
+            x2_tx = x2_tx .* exp(1i*omega2*(1:length(x2_tx)));
 
-            n1 = 1:length(x1_transmit);
-            n2 = 1:length(x2_transmit);
+            % Align lengths
+            diff = length(x2_tx) - length(x1_tx);
+            x1_tx = [x1_tx zeros(1,diff)];
+            y = x1_tx + x2_tx;
 
-            x1_transmit = x1_transmit .* exp(1j * n1 * w1 / fs);
-            x2_transmit = x2_transmit .* exp(1j * n2 * w2 / fs);
+            %% RX x1
+            x1_rx = y .* exp(-1i*omega1*(1:length(y)));
+            x1_rx = conv(x1_rx, G1);
+            x1_rx = downsample(x1_rx, M1) * (1/A1);
 
-            num_of_zeros = length(x2_transmit) - length(x1_transmit);
-            x1_transmit = [x1_transmit zeros(1, num_of_zeros)];
-            y_tx = x1_transmit + x2_transmit;
+            %% RX x2
+            x2_rx = y .* exp(-1i*omega2*(1:length(y)));
+            x2_rx = conv(x2_rx, G2);
+            x2_rx = downsample(x2_rx, M2) * (1/A2);
 
-            % Receiver
-            n = 1:length(y_tx);
-            x1_received = y_tx .* exp(-1j * n * w1 / fs);
-            x2_received = y_tx .* exp(-1j * n * w2 / fs);
+            %% Alignment 
+            L = min([length(x1_rx), length(x1)]);
+            x1_est = x1_rx(S+1:S+L);
+            x1_ref = x1(1:L);
 
-            x1_received = conv(x1_received, g1);
-            x2_received = conv(x2_received, g2);
+            L = min([length(x2_rx), length(x2)]);
+            x2_est = x2_rx(S+1:S+L);
+            x2_ref = x2(1:L);
 
-            x1_received = downsample(x1_received, M1);
-            x2_received = downsample(x2_received, M2);
+            %% SIDR 
+            SIDR1(S) = 10*log10(sum(abs(x1_ref).^2) / sum(abs(x1_ref - x1_est).^2));
+            SIDR2(S) = 10*log10(sum(abs(x2_ref).^2) / sum(abs(x2_ref - x2_est).^2));
 
-            x1_received = x1_received .* 1/A1;
-            x2_received = x2_received .* 1/A2;
-
-            x1_est = x1_received(S+1:end-S*2);
-            x2_est = x2_received(S+1:end-S);
-
-            SIDR1(S) = 10*log10(sum(abs(x1).^2)/sum(abs(x1_est - x1).^2));
-            SIDR2(S) = 10*log10(sum(abs(x2).^2)/sum(abs(x2_est - x2).^2));
-
-            error_x1(S) = length(find(qamdemod(x1, Q) - qamdemod(x1_est, Q)));
-            error_x2(S) = length(find(qamdemod(x2, Q) - qamdemod(x2_est, Q)));
+            %% SYMBOL ERRORS 
+            err1(S) = length(find(qamdemod(x1_ref,Q) ~= qamdemod(x1_est,Q)));
+            err2(S) = length(find(qamdemod(x2_ref,Q) ~= qamdemod(x2_est,Q)));
 
         end
 
-        % Store result per case 
         SIDR1_all(c,:) = SIDR1;
         SIDR2_all(c,:) = SIDR2;
-        error_x1_all(c,:) = error_x1;
-        error_x2_all(c,:) = error_x2;
 
-
-        if (A1 == 1 && A2 == 1)
-            figure(4);
-        elseif (A1 == 1 && A2 == 0.1)
-            figure(6);
-        elseif (A1 == 0.1 && A2 == 1)
-            figure(8);
+        %% PLOTS
+        if A1==1 && A2==1, figure(4);
+        elseif A1==1 && A2==0.1, figure(6);
+        else, figure(8);
         end
 
-        if Q == 4
-            p = 1;
-        else
-            p = 2;
+        subplot(2,1,1+(Q==64));
+        plot(S1,SIDR1); hold on;
+        plot(S1,SIDR2);
+        title("SIDR A1=" + A1 + " A2=" + A2 + " Q=" + Q);
+        legend("x1","x2");
+
+        if A1==1 && A2==1, figure(5);
+        elseif A1==1 && A2==0.1, figure(7);
+        else, figure(9);
         end
 
-        subplot(2,1,p)
-        plot(S1, SIDR1); hold on
-        plot(S1, SIDR2)
-        xlabel('S')
-        ylabel('SIDR (dB)')
-        title(['A1=',num2str(A1),' A2=',num2str(A2),' Q=',num2str(Q)])
-        legend('x1','x2')
-
-        if (A1 == 1 && A2 == 1)
-            figure(5);
-        elseif (A1 == 1 && A2 == 0.1)
-            figure(7);
-        elseif (A1 == 0.1 && A2 == 1)
-            figure(9);
-        end
-
-        subplot(2,1,p)
-        plot(S1, error_x1); hold on
-        plot(S1, error_x2)
-        xlabel('S')
-        ylabel('Errors')
-        title(['A1=',num2str(A1),' A2=',num2str(A2),' Q=',num2str(Q)])
-        legend('x1','x2')
+        subplot(2,1,1+(Q==64));
+        plot(S1,err1); hold on;
+        plot(S1,err2);
+        title("Errors A1=" + A1 + " A2=" + A2 + " Q=" + Q);
+        legend("x1","x2");
 
     end
 end
 
-%% --- A1 = 1, S1 = S2 = 20, A2 sweep 
-
+%% A2 sweep (A1=1, S=20)
 A1 = 1;
-S1 = 20;
-S2 = 20;
+S = 20;
 
-A2_vec = logspace(0, -6, 120);
+A2_vec = logspace(-6,0,120); %Test A2 from 10^-6 to 1 and see where symbol error starts
 
-figure;
-hold on;
-grid on;
+figure; 
+hold on; 
 set(gca,'XScale','log');
 
-for Q = [4, 64]
+for Q = [4 64]
 
-    x1 = qammod(randi([0 Q-1], L1, 1)', Q);
-    x2 = qammod(randi([0 Q-1], L2, 1)', Q);
+    x1 = qammod(randi([0 Q-1],L1,1)',Q);
+    x2 = qammod(randi([0 Q-1],L2,1)',Q);
 
-    errors_x1 = zeros(size(A2_vec));
-    errors_x2 = zeros(size(A2_vec));
+    e1 = zeros(size(A2_vec));
+    e2 = zeros(size(A2_vec));
 
     for k = 1:length(A2_vec)
 
         A2 = A2_vec(k);
 
-        
-        g1 = rcosdesign(rolloff1, S1, M1, 'sqrt')/sqrt(M1);
-        g2 = rcosdesign(rolloff2, S2, M2, 'sqrt')/sqrt(M2);
+        G1 = rcosdesign(rolloff1,S,M1,'sqrt')/sqrt(M1);
+        G2 = rcosdesign(rolloff2,S,M2,'sqrt')/sqrt(M2);
 
-        H1 = M1*g1;
-        H2 = M2*g2;
+        H1 = M1*G1;
+        H2 = M2*G2;
 
-        %Transmitter 
-        x1_transmit = upsample(x1, M1);
-        x2_transmit = upsample(x2, M2);
+        x1_tx = upsample(x1,M1);
+        x1_tx = conv(x1_tx,H1)*A1;
+        x1_tx = x1_tx .* exp(1i*omega1*(1:length(x1_tx)));
 
-        x1_transmit = conv(x1_transmit, H1);
-        x2_transmit = conv(x2_transmit, H2);
+        x2_tx = upsample(x2,M2);
+        x2_tx = conv(x2_tx,H2)*A2;
+        x2_tx = x2_tx .* exp(1i*omega2*(1:length(x2_tx)));
 
-        x1_transmit = x1_transmit .* A1;
-        x2_transmit = x2_transmit .* A2;
+        diff = length(x2_tx)-length(x1_tx);
+        x1_tx = [x1_tx zeros(1,diff)];
 
-        n1 = 1:length(x1_transmit);
-        n2 = 1:length(x2_transmit);
+        y = x1_tx + x2_tx;
 
-        x1_transmit = x1_transmit .* exp(1j * n1 * w1 / fs);
-        x2_transmit = x2_transmit .* exp(1j * n2 * w2 / fs);
+        x1_rx = conv(y.*exp(-1i*omega1*(1:length(y))),G1);
+        x1_rx = downsample(x1_rx,M1)/A1;
+        x1_est = x1_rx(S+1:end-2*S);
 
-        num_of_zeros = length(x2_transmit) - length(x1_transmit);
+        x2_rx = conv(y.*exp(-1i*omega2*(1:length(y))),G2);
+        x2_rx = downsample(x2_rx,M2)/A2;
+        x2_est = x2_rx(S+1:end-S);
 
-        if num_of_zeros > 0
-            x1_transmit = [x1_transmit zeros(1, num_of_zeros)];
-        elseif num_of_zeros < 0
-            x2_transmit = [x2_transmit zeros(1, -num_of_zeros)];
-        end
+        L = min([length(x1_est),length(x1)]);
+        e1(k) = length(find(qamdemod(x1(1:L),Q) ~= qamdemod(x1_est(1:L),Q)));
 
-        y_tx = x1_transmit + x2_transmit;
-
-        % Receiver x1
-        n = 1:length(y_tx);
-
-        x1_received = y_tx .* exp(-1j * n * w1 / fs);
-        x1_received = conv(x1_received, g1);
-        x1_received = downsample(x1_received, M1);
-        x1_received = x1_received .* 1/A1;
-
-        x1_est = x1_received(S1+1:end-2*S1);
-
-        % Receiver x2
-        x2_received = y_tx .* exp(-1j * n * w2 / fs);
-        x2_received = conv(x2_received, g2);
-        x2_received = downsample(x2_received, M2);
-        x2_received = x2_received .* 1/A2;
-
-        x2_est = x2_received(S2+1:end-S2);
-
-        
-        L = min([length(x1_est), length(x1), length(x2_est), length(x2)]);
-
-        errors_x1(k) = sum(qamdemod(x1(1:L),Q) ~= qamdemod(x1_est(1:L),Q));
-        errors_x2(k) = sum(qamdemod(x2(1:L),Q) ~= qamdemod(x2_est(1:L),Q));
+        L = min([length(x2_est),length(x2)]);
+        e2(k) = length(find(qamdemod(x2(1:L),Q) ~= qamdemod(x2_est(1:L),Q)));
 
     end
 
-    %Threshold detection 
-    idx = find(errors_x1 == 0 & errors_x2 == 0, 1, 'last');
-
-    if isempty(idx)
-        fprintf('Q = %d: No error-free A2 found\n', Q);
-    else
-        fprintf('Q = %d: Smallest A2 ≈ %.5g\n', Q, A2_vec(idx));
-    end
-
-    semilogx(A2_vec, errors_x1, '-o');
-    semilogx(A2_vec, errors_x2, '-x');
+    semilogx(A2_vec,e1);
+    semilogx(A2_vec,e2);
 
 end
 
-xlabel('A2');
-ylabel('Symbol Errors');
-title('A1 = 1, S1 = S2 = 20');
-
-legend('x1 (Q=4)','x2 (Q=4)','x1 (Q=64)','x2 (Q=64)');
+xlabel("A2");
+ylabel("Symbol errors");
+title("A1=1, S=20");
+legend("x1 Q4","x2 Q4","x1 Q64","x2 Q64");

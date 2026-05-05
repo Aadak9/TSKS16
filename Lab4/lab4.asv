@@ -23,7 +23,7 @@ freqz(h_eq_1);
 title("Case 1 (White)");
 
 %% Case 2
-%Should use raised cosine filter to minimize ISI?
+%Should use 
 b = fir1(30, 0.5);
 
 y_tx_2 = randn(1, L);

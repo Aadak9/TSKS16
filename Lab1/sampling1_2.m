@@ -38,7 +38,8 @@ for d = 1:3
     phi = Delta_phase_vals(d);
 
     subplot(3,1,d);
-    hold on; grid on;
+    hold on; 
+    grid on;
 
     legends = {};   
 

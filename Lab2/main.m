@@ -53,7 +53,8 @@ B = 16;
 Nvals = round(logspace(2,5,50));
 SNR_theory = 6.02*B + 1.76;
 
-figure; hold on;
+figure; 
+hold on;
 colors = lines(3);
 
 for s = 1:3
@@ -178,7 +179,8 @@ N2 = 16*N1;
 
 Ns = [N1 N2];
 
-figure; hold on;
+figure; 
+hold on;
 
 colors = lines(2);
 
@@ -197,11 +199,11 @@ for i = 1:2
 
     X = fft(xw, N);
 
-    % Proper scaling + normalization
+    
     mag = 20*log10(2*abs(X)/W + eps);
     mag = mag - max(mag);
 
-    % Frequency axis (0 → 1)
+    % Frequency axis 
     f = (0:N-1)/N;
 
     plot(f, mag, 'LineWidth', 1.2, 'Color', colors(i,:));

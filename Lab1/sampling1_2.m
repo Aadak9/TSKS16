@@ -12,7 +12,6 @@ k_vals = -5:5;
 f = (0:N-1)*(fs/N);
 omega = 2*pi*f;
 omega_c = 0.8125*pi;   % digital rad/sample cutoff
-w_axis  = linspace(-pi, pi, N);
 A2 = 1;
 P_vals = 0:60;
 
@@ -76,7 +75,7 @@ for d = 1:3
             x0 = A1*x_a1;
 
             signal_power = sum(x0.^2);
-            error_power  = sum((x - x0).^2) + eps;
+            error_power  = sum((x - x0).^2);
 
             SIDR(i) = 10*log10(signal_power / error_power);
 
@@ -96,8 +95,7 @@ for d = 1:3
 
 end
 
-
-%% 2. Spectrum comparison
+%% 2. Spectrum comparison 
 
 figure;
 
@@ -106,15 +104,12 @@ F = (-N/2:N/2-1)*(fs/N);
 
 P_test = [10 20 40 60];
 
-omega_c = 0.8125*pi*fs;
-eps = sqrt(10^(0.1/10) - 1);
-
 for d = 1:3
 
     phi = Delta_phase_vals(d);
 
     subplot(3,1,d);
-    hold on;
+    hold on; 
     grid on;
 
     legends = {};
@@ -123,8 +118,8 @@ for d = 1:3
 
         P = P_test(p);
 
-        xa1 = zeros(1,N);
-        xa2 = zeros(1,N);
+        xa1_filt = zeros(1,N);
+        xa2_filt = zeros(1,N);
 
         for k = k_vals
 
@@ -132,33 +127,28 @@ for d = 1:3
             f2 = fc2 + fc1*k*Delta;
 
             ph = phi * (-1)^k;
+            eps = sqrt(10^(0.1/10) - 1);
 
-            xa1 = xa1 + sin(2*pi*f1*t + ph);
-            xa2 = xa2 + sin(2*pi*f2*t);
+            H1 = 1/sqrt(1 + eps^2*((2*pi*f1)/omega_c)^(2*P));
+            H2 = 1/sqrt(1 + eps^2*((2*pi*f2)/omega_c)^(2*P));
+
+            xa1_filt = xa1_filt + H1*sin(2*pi*f1*t + ph);
+            xa2_filt = xa2_filt + H2*sin(2*pi*f2*t);
 
         end
 
-        x = A1_vals(1)*xa1 + A2*xa2;
+        x = A1_vals(1)*xa1_filt + A2*xa2_filt;
 
-        X = fftshift(fft(x .* window));
+        x_w = x .* window;
+        X = fftshift(fft(x_w, N));
 
-        w = 2*pi*F;  
+        X_mag_db = 20*log10(abs(X)/max(abs(X)));
 
-        
-        H = 1 ./ sqrt(1 + eps^2 * (abs(w)/omega_c).^(2*P));
-
-        Xf = X .* H;
-
-        A_dB = 20*log10(abs(Xf)/max(abs(Xf)) + 1e-12);
-
-        plot(F, A_dB, 'LineWidth', 1.5);
+        plot(F, X_mag_db, 'LineWidth', 1.5);
 
         legends{end+1} = ['P = ', num2str(P)];
 
     end
-
-    %xlim([-fs/2 fs/2]);
-    %ylim([-220 10]);
 
     title(['Spectrum, phase = ', num2str(phi)]);
     xlabel('Frequency (Hz)');

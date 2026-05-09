@@ -1,6 +1,5 @@
 clear; close all;
 
-%% Parameters (from lab text)
 rolloff1 = 1/3;
 rolloff2 = 1/3;
 
@@ -16,7 +15,6 @@ omega2 = pi/6;
 
 S1 = 1:40;
 
-%% Initial filter check (S=10)
 G1 = rcosdesign(rolloff1, 10, M1, 'sqrt')/sqrt(M1);
 G2 = rcosdesign(rolloff2, 10, M2, 'sqrt')/sqrt(M2);
 
@@ -31,13 +29,16 @@ subplot(2,2,2); impz(G2.*G2); title("G2 cascaded");
 subplot(2,2,3); impz(downsample(M1*G1.*G1,M1)); title("M1G1G1 ↓M1");
 subplot(2,2,4); impz(downsample(M2*G2.*G2,M2)); title("M2G2G2 ↓M2");
 
-%% Cases A1/A2
 cases = [1 1;
          1 0.1;
          0.1 1];
 
 SIDR1_all = zeros(3,40);
 SIDR2_all = zeros(3,40);
+
+y_store = [];
+
+scatter_saved = false;
 
 for c = 1:3
 
@@ -56,14 +57,12 @@ for c = 1:3
 
         for S = S1
 
-            %% Filters
             G1 = rcosdesign(rolloff1, S, M1, 'sqrt')/sqrt(M1);
             G2 = rcosdesign(rolloff2, S, M2, 'sqrt')/sqrt(M2);
 
             H1 = M1*G1;
             H2 = M2*G2;
 
-            %% TX
             x1_tx = upsample(x1, M1);
             x1_tx = conv(x1_tx, H1) .* A1;
             n1_up = 1:length(x1_tx);
@@ -73,44 +72,41 @@ for c = 1:3
             x2_tx = conv(x2_tx, H2) * A2;
             x2_tx = x2_tx .* exp(1i*omega2*(1:length(x2_tx)));
 
-            % Align lengths
             diff = length(x2_tx) - length(x1_tx);
             x1_tx = [x1_tx zeros(1,diff)];
+
             y = x1_tx + x2_tx;
 
-            %% RX x1
+            if isempty(y_store) && c == 1 && Q == 64 && S == 20
+                y_store = y;
+            end
+
             x1_rx = y .* exp(-1i*omega1*(1:length(y)));
             x1_rx = conv(x1_rx, G1);
             x1_rx = downsample(x1_rx, M1) * (1/A1);
 
-            %% RX x2
             x2_rx = y .* exp(-1i*omega2*(1:length(y)));
             x2_rx = conv(x2_rx, G2);
             x2_rx = downsample(x2_rx, M2) * (1/A2);
 
-            %% Alignment 
-            L = min([length(x1_rx), length(x1)]);
-            x1_est = x1_rx(S+1:S+L);
-            x1_ref = x1(1:L);
+            %L = min([length(x1_rx), length(x1)]);
+            x1_est = x1_rx(S+1:S+L1);
+            
 
-            L = min([length(x2_rx), length(x2)]);
-            x2_est = x2_rx(S+1:S+L);
-            x2_ref = x2(1:L);
+            %L = min([length(x2_rx), length(x2)]);
+            x2_est = x2_rx(S+1:S+L2);
 
-            %% SIDR 
-            SIDR1(S) = 10*log10(sum(abs(x1_ref).^2) / sum(abs(x1_ref - x1_est).^2));
-            SIDR2(S) = 10*log10(sum(abs(x2_ref).^2) / sum(abs(x2_ref - x2_est).^2));
+            SIDR1(S) = 10*log10(sum(abs(x1).^2) / sum(abs(x1 - x1_est).^2));
+            SIDR2(S) = 10*log10(sum(abs(x2).^2) / sum(abs(x2 - x2_est).^2));
 
-            %% SYMBOL ERRORS 
-            err1(S) = length(find(qamdemod(x1_ref,Q) ~= qamdemod(x1_est,Q)));
-            err2(S) = length(find(qamdemod(x2_ref,Q) ~= qamdemod(x2_est,Q)));
+            err1(S) = length(find(qamdemod(x1,Q) ~= qamdemod(x1_est,Q)));
+            err2(S) = length(find(qamdemod(x2,Q) ~= qamdemod(x2_est,Q)));
 
         end
 
         SIDR1_all(c,:) = SIDR1;
         SIDR2_all(c,:) = SIDR2;
 
-        %% PLOTS
         if A1==1 && A2==1, figure(4);
         elseif A1==1 && A2==0.1, figure(6);
         else, figure(8);
@@ -136,14 +132,30 @@ for c = 1:3
     end
 end
 
-%% A2 sweep (A1=1, S=20)
+NFFT = 2^nextpow2(length(y_store));
+Y = fftshift(fft(y_store, NFFT));
+
+fs = 30e6;
+
+f = linspace(-fs/2, fs/2, NFFT);
+
+figure;
+plot(f/1e6, 20*log10(abs(Y)));
+grid on;
+
+title('Spectrum of y_{tx}(n)');
+xlabel('Frequency (MHz)');
+ylabel('Magnitude (dB)');
+
+
+
 A1 = 1;
 S = 20;
 
-A2_vec = logspace(-6,0,120); %Test A2 from 10^-6 to 1 and see where symbol error starts
+A2_vec = logspace(-6,0,120);
 
-figure; 
-hold on; 
+figure;
+hold on;
 set(gca,'XScale','log');
 
 for Q = [4 64]

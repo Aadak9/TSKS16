@@ -7,6 +7,7 @@ L2 = 2^12;
 
 M = 100;
 fs = 30e6;
+fc = 350e6;
 
 rolloff = 1/3;
 S = 5;
@@ -15,6 +16,7 @@ Q = 64;
 
 M1 = 4;
 M2 = 8;
+
 
 omega1 = -pi/3;
 omega2 = pi/6;
@@ -61,7 +63,7 @@ y_tx = x1_tx + x2_tx;
 
 y_tx_if = y_tx;   % keep for spectrum
 
-%% TX SPECTRUM (PLOT 1)
+%% TX SPECTRUM 
 
 figure;
 pwelch(y_tx_if,[],[],[],fs*M);
@@ -81,7 +83,7 @@ y = conv(y, c);
 
 y_rx0 = y;
 
-%% CHANNEL SPECTRUM (PLOT 2)
+%% CHANNEL SPECTRUM 
 
 figure;
 pwelch(y_rx0,[],[],[],fs*M);

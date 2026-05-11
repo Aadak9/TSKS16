@@ -1,0 +1,405 @@
+clear; clc; close all;
+
+%% PARAMETERS
+
+L1 = 2^13;
+L2 = 2^12;
+
+Q = 64;
+
+fs = 30e6;
+fc = 350e6;
+M = 100;
+
+M1 = 4;
+M2 = 8;
+
+rolloff = 1/3;
+S = 10;
+
+omega1 = -pi/3;
+omega2 = pi/6;
+
+wc = 2*pi*fc/(M*fs);
+
+SNR_test = 5:20;
+Neq_test = 0:10;
+
+c_ideal = 1;
+c = 0.25*exp(1i*0.1*pi)*[1 zeros(1,15) 2.4 zeros(1,15) 1];
+
+%% SIGNALS
+
+d1 = randi([0 Q-1],L1,1);
+d2 = randi([0 Q-1],L2,1);
+
+x1 = qammod(d1,Q,'UnitAveragePower',true).';
+x2 = qammod(d2,Q,'UnitAveragePower',true).';
+
+%% FILTERS
+
+G1 = rcosdesign(rolloff,S,M1,'sqrt')/sqrt(M1);
+G2 = rcosdesign(rolloff,S,M2,'sqrt')/sqrt(M2);
+
+H1 = M1*G1;
+H2 = M2*G2;
+
+G_lp = rcosdesign(rolloff,S,M,'sqrt')/sqrt(M);
+H_lp = M*G_lp;
+
+%% TRANSMUX TRANSMITTER
+
+x1_tx = upsample(x1,M1);
+x1_tx = conv(x1_tx,H1);
+n = 0:length(x1_tx)-1;
+x1_tx = x1_tx .* exp(1i*omega1*n);
+
+x2_tx = upsample(x2,M2);
+x2_tx = conv(x2_tx,H2);
+n = 0:length(x2_tx)-1;
+x2_tx = x2_tx .* exp(1i*omega2*n);
+
+L = max(length(x1_tx),length(x2_tx));
+
+x1_tx = [x1_tx zeros(1,L-length(x1_tx))];
+x2_tx = [x2_tx zeros(1,L-length(x2_tx))];
+
+y_tx = x1_tx + x2_tx;
+
+%% SPECTRUM OF y_tx
+
+NFFT = 2^nextpow2(length(y_tx));
+Y = fftshift(fft(y_tx,NFFT));
+f = linspace(-fs/2,fs/2,NFFT);
+
+figure;
+plot(f/1e6,20*log10(abs(Y)/max(abs(Y)) + eps));
+grid on;
+xlabel('Frequency [MHz]');
+ylabel('Magnitude [dB]');
+title('Spectrum of y_{tx}');
+
+%% IDEAL ZERO-IF SYSTEM
+
+y = upsample(y_tx,M);
+y = conv(y,H_lp);
+
+m = 0:length(y)-1;
+y = real(y .* exp(1i*wc*m));
+
+y = conv(y,c_ideal);
+
+m = 0:length(y)-1;
+y = 2*y .* exp(-1i*wc*m);
+
+y = conv(y,G_lp);
+y = downsample(y,M);
+
+y_rx_ideal = y(S+1:S+length(y_tx));
+
+%% RECEIVER FOR IDEAL CASE
+
+n = 0:length(y_rx_ideal)-1;
+
+x1_rx = y_rx_ideal .* exp(-1i*omega1*n);
+x1_rx = conv(x1_rx,G1);
+x1_rx = downsample(x1_rx,M1);
+x1_est_ideal = x1_rx(S+1:S+L1);
+
+x2_rx = y_rx_ideal .* exp(-1i*omega2*n);
+x2_rx = conv(x2_rx,G2);
+x2_rx = downsample(x2_rx,M2);
+x2_est_ideal = x2_rx(S+1:S+L2);
+
+SIDR1_ideal = 10*log10(sum(abs(x1).^2)/sum(abs(x1_est_ideal-x1).^2));
+SIDR2_ideal = 10*log10(sum(abs(x2).^2)/sum(abs(x2_est_ideal-x2).^2));
+
+err1_ideal = sum(qamdemod(x1_est_ideal,Q,'UnitAveragePower',true).' ~= d1);
+err2_ideal = sum(qamdemod(x2_est_ideal,Q,'UnitAveragePower',true).' ~= d2);
+
+fprintf("Ideal zero-IF case\n");
+fprintf("SIDR1 = %.2f dB, symbol errors x1 = %d\n",SIDR1_ideal,err1_ideal);
+fprintf("SIDR2 = %.2f dB, symbol errors x2 = %d\n\n",SIDR2_ideal,err2_ideal);
+
+figure;
+subplot(2,1,1);
+scatter(real(x1_est_ideal),imag(x1_est_ideal),8,'filled');
+grid on; axis equal;
+title('x1 estimate, ideal zero-IF');
+
+subplot(2,1,2);
+scatter(real(x2_est_ideal),imag(x2_est_ideal),8,'filled');
+grid on; axis equal;
+title('x2 estimate, ideal zero-IF');
+
+%% CHANNEL WITHOUT EQUALIZER
+
+y = upsample(y_tx,M);
+y = conv(y,H_lp);
+
+m = 0:length(y)-1;
+y = real(y .* exp(1i*wc*m));
+
+y = conv(y,c);
+
+m = 0:length(y)-1;
+y = 2*y .* exp(-1i*wc*m);
+
+y = conv(y,G_lp);
+y = downsample(y,M);
+
+y_rx_channel = y(S+1:S+length(y_tx));
+
+%% RECEIVER FOR CHANNEL CASE
+
+n = 0:length(y_rx_channel)-1;
+
+x1_rx = y_rx_channel .* exp(-1i*omega1*n);
+x1_rx = conv(x1_rx,G1);
+x1_rx = downsample(x1_rx,M1);
+x1_est_channel = x1_rx(S+1:S+L1);
+
+x2_rx = y_rx_channel .* exp(-1i*omega2*n);
+x2_rx = conv(x2_rx,G2);
+x2_rx = downsample(x2_rx,M2);
+x2_est_channel = x2_rx(S+1:S+L2);
+
+SINDR1_channel = 10*log10(sum(abs(x1).^2)/sum(abs(x1_est_channel-x1).^2));
+SINDR2_channel = 10*log10(sum(abs(x2).^2)/sum(abs(x2_est_channel-x2).^2));
+
+err1_channel = sum(qamdemod(x1_est_channel,Q,'UnitAveragePower',true).' ~= d1);
+err2_channel = sum(qamdemod(x2_est_channel,Q,'UnitAveragePower',true).' ~= d2);
+
+fprintf("Channel case without equalizer\n");
+fprintf("SINDR1 = %.2f dB, symbol errors x1 = %d\n",SINDR1_channel,err1_channel);
+fprintf("SINDR2 = %.2f dB, symbol errors x2 = %d\n\n",SINDR2_channel,err2_channel);
+
+figure;
+subplot(2,1,1);
+scatter(real(x1_est_channel),imag(x1_est_channel),8,'filled');
+grid on; axis equal;
+title('x1 estimate, channel without equalizer');
+
+subplot(2,1,2);
+scatter(real(x2_est_channel),imag(x2_est_channel),8,'filled');
+grid on; axis equal;
+title('x2 estimate, channel without equalizer');
+
+%% CHANNEL WITH EQUALIZER
+
+SINDR1 = zeros(length(Neq_test),length(SNR_test));
+SINDR2 = zeros(length(Neq_test),length(SNR_test));
+
+symerr1 = zeros(length(Neq_test),length(SNR_test));
+symerr2 = zeros(length(Neq_test),length(SNR_test));
+
+dmin_store = zeros(length(Neq_test),length(SNR_test));
+
+for snr_idx = 1:length(SNR_test)
+
+    SNR = SNR_test(snr_idx);
+
+    y = upsample(y_tx,M);
+    y = conv(y,H_lp);
+
+    m = 0:length(y)-1;
+    y = real(y .* exp(1i*wc*m));
+
+    y = conv(y,c);
+
+    y = awgn(y,SNR,'measured');
+
+    m = 0:length(y)-1;
+    y = 2*y .* exp(-1i*wc*m);
+
+    y = conv(y,G_lp);
+    y = downsample(y,M);
+
+    y_rx = y(S+1:end);
+
+    for neq_idx = 1:length(Neq_test)
+
+        Neq = Neq_test(neq_idx);
+
+        [h_eq,d_min,~] = eq(y_tx,y_rx,Neq);
+
+        y_rx_eq = conv(y_rx,h_eq);
+        y_rx_eq = y_rx_eq(d_min+1:d_min+length(y_tx));
+
+        n = 0:length(y_rx_eq)-1;
+
+        x1_rx = y_rx_eq .* exp(-1i*omega1*n);
+        x1_rx = conv(x1_rx,G1);
+        x1_rx = downsample(x1_rx,M1);
+        x1_est = x1_rx(S+1:S+L1);
+
+        x2_rx = y_rx_eq .* exp(-1i*omega2*n);
+        x2_rx = conv(x2_rx,G2);
+        x2_rx = downsample(x2_rx,M2);
+        x2_est = x2_rx(S+1:S+L2);
+
+        SINDR1(neq_idx,snr_idx) = 10*log10(sum(abs(x1).^2)/sum(abs(x1_est-x1).^2));
+        SINDR2(neq_idx,snr_idx) = 10*log10(sum(abs(x2).^2)/sum(abs(x2_est-x2).^2));
+
+        symerr1(neq_idx,snr_idx) = sum(qamdemod(x1_est,Q,'UnitAveragePower',true).' ~= d1);
+        symerr2(neq_idx,snr_idx) = sum(qamdemod(x2_est,Q,'UnitAveragePower',true).' ~= d2);
+
+        dmin_store(neq_idx,snr_idx) = d_min;
+
+    end
+end
+
+%% SCATTER PLOTS FOR SNR = 20 dB AND N_eq = 10
+
+snr_plot_idx = find(SNR_test == 20);
+neq_plot_idx = find(Neq_test == 10);
+
+SNR = SNR_test(snr_plot_idx);
+Neq = Neq_test(neq_plot_idx);
+
+y = upsample(y_tx,M);
+y = conv(y,H_lp);
+
+m = 0:length(y)-1;
+y = real(y .* exp(1i*wc*m));
+
+y = conv(y,c);
+
+y = awgn(y,SNR,'measured');
+
+m = 0:length(y)-1;
+y = 2*y .* exp(-1i*wc*m);
+
+y = conv(y,G_lp);
+y = downsample(y,M);
+
+y_rx = y(S+1:end);
+
+[h_eq,d_min,~] = eq(y_tx,y_rx,Neq);
+
+y_rx_eq = conv(y_rx,h_eq);
+y_rx_eq = y_rx_eq(d_min+1:d_min+length(y_tx));
+
+n = 0:length(y_rx_eq)-1;
+
+x1_rx = y_rx_eq .* exp(-1i*omega1*n);
+x1_rx = conv(x1_rx,G1);
+x1_rx = downsample(x1_rx,M1);
+x1_est = x1_rx(S+1:S+L1);
+
+x2_rx = y_rx_eq .* exp(-1i*omega2*n);
+x2_rx = conv(x2_rx,G2);
+x2_rx = downsample(x2_rx,M2);
+x2_est = x2_rx(S+1:S+L2);
+
+figure;
+subplot(2,1,1);
+scatter(real(x1_est),imag(x1_est),8,'filled');
+grid on; axis equal;
+title('x1 estimate, equalized, SNR = 20 dB, N_{eq} = 10');
+
+subplot(2,1,2);
+scatter(real(x2_est),imag(x2_est),8,'filled');
+grid on; axis equal;
+title('x2 estimate, equalized, SNR = 20 dB, N_{eq} = 10');
+
+%% SINDR PLOTS
+
+figure;
+plot(SNR_test,SINDR1(end,:),'LineWidth',1.4); hold on;
+plot(SNR_test,SINDR2(end,:),'LineWidth',1.4);
+grid on;
+xlabel('SNR [dB]');
+ylabel('SINDR [dB]');
+legend('x1','x2','Location','best');
+title('SINDR versus SNR for N_{eq} = 10');
+
+figure;
+plot(Neq_test,SINDR1(:,end),'LineWidth',1.4); hold on;
+plot(Neq_test,SINDR2(:,end),'LineWidth',1.4);
+grid on;
+xlabel('N_{eq}');
+ylabel('SINDR [dB]');
+legend('x1','x2','Location','best');
+title('SINDR versus N_{eq} for SNR = 20 dB');
+
+figure;
+imagesc(SNR_test,Neq_test,SINDR1);
+axis xy;
+colorbar;
+xlabel('SNR [dB]');
+ylabel('N_{eq}');
+title('SINDR for x1');
+
+figure;
+imagesc(SNR_test,Neq_test,SINDR2);
+axis xy;
+colorbar;
+xlabel('SNR [dB]');
+ylabel('N_{eq}');
+title('SINDR for x2');
+
+%% SYMBOL ERROR PLOTS
+
+figure;
+semilogy(SNR_test,symerr1(end,:)+1,'LineWidth',1.4); hold on;
+semilogy(SNR_test,symerr2(end,:)+1,'LineWidth',1.4);
+grid on;
+xlabel('SNR [dB]');
+ylabel('Symbol errors + 1');
+legend('x1','x2','Location','best');
+title('Symbol errors versus SNR for N_{eq} = 10');
+
+figure;
+semilogy(Neq_test,symerr1(:,end)+1,'LineWidth',1.4); hold on;
+semilogy(Neq_test,symerr2(:,end)+1,'LineWidth',1.4);
+grid on;
+xlabel('N_{eq}');
+ylabel('Symbol errors + 1');
+legend('x1','x2','Location','best');
+title('Symbol errors versus N_{eq} for SNR = 20 dB');
+
+%% PRINT FINAL RESULTS
+
+fprintf("Equalized case, SNR = 20 dB, N_eq = 10\n");
+fprintf("SINDR1 = %.2f dB, symbol errors x1 = %d\n",SINDR1(end,end),symerr1(end,end));
+fprintf("SINDR2 = %.2f dB, symbol errors x2 = %d\n",SINDR2(end,end),symerr2(end,end));
+
+%% EQUALIZER FUNCTION
+
+function [h_eq,d_min,ERR_min] = eq(y_tx,y_rx,Neq)
+
+    y_tx = y_tx(:);
+    y_rx = y_rx(:);
+
+    Ltx = length(y_tx);
+    Lrx = length(y_rx);
+
+    ERR_min = Inf;
+    d_min = 0;
+    h_eq = zeros(Neq+1,1);
+
+    for d = 0:Neq
+
+        L = min(Lrx-Neq,Ltx-d);
+
+        col = y_rx(Neq+1:Neq+L);
+        row = y_rx(Neq+1:-1:1).';
+
+        A = toeplitz(col,row);
+
+        b = y_tx(1+d:L+d);
+
+        h_tmp = (A'*A)\(A'*b);
+
+        y_eq = A*h_tmp;
+
+        ERR = sum(abs(y_eq-b).^2);
+
+        if ERR < ERR_min
+            ERR_min = ERR;
+            h_eq = h_tmp;
+            d_min = d;
+        end
+    end
+end

@@ -139,73 +139,89 @@ legend('CFO only', 'PO only');
 %}
 
 %% TASK 6.2 Both CFO and PO present
-clc;
-clear;
-close all;
+%clc;
+%clear;
+%close all;
 
-Q = 64;
+Q = 64; % 64-QAM modulation
 
-L = 2^12;
+L = 2^12; % Payload length
 
-w0T = 5e-5*pi;
-alpha = 0.1*pi;
+w0T = 5e-5*pi; % Carrier frequency offset (CFO)
+alpha = 0.1*pi; % Constant phase offset (PO)
 
-SNR_dB = 30;
+SNR_dB = 30; % AWGN signal-to-noise ratio
 
-N_vals = [8 16 32 64 128 256];
+N_vals = [8 16 32 64 128 256]; % Repeated-block lengths for CFO estimation
 
-MC = 100;
+MC = 100; % Number of Monte Carlo simulations
 
-Neq = 10;
+Neq = 10; % Equalizer order
 
-SNDR_avg = zeros(size(N_vals));
+SNDR_avg = zeros(size(N_vals)); % Storage for average SNDR values
 
 for k = 1:length(N_vals)
 
-    N = N_vals(k);
+    N = N_vals(k); % Current repeated-block length
 
-    SNDR_temp = zeros(1, MC);
+    SNDR_temp = zeros(1, MC); % Storage for temporary SNDR values
 
     for mc = 1:MC
 
+        % Generate random 64-QAM payload symbols
         x_payload = qammod(randi([0 Q-1], L, 1), Q, 'UnitAveragePower', true);
 
+        % Create repeated training sequence:
+        % first N samples repeated twice for CFO estimation
         x = [x_payload(1:N); x_payload(1:N); x_payload];
 
-        len = length(x);
+        len = length(x); % Total signal length
 
-        n = (0:len-1).';
+        n = (0:len-1).'; % Sample indices
 
+        % Apply CFO and PO
         y = x .* exp(1j*(w0T*n + alpha));
 
+        % Add AWGN
         y = awgn(y, SNR_dB, 'measured');
 
+        % CFO estimation using repeated blocks
         cfo_est = angle(sum(conj(y(1:N)) .* y(N+1:2*N))) / N;
 
+        % CFO compensation
         y_cfo = y .* exp(-1j*cfo_est*n);
 
-        alpha_est = angle(sum(conj(x_payload) .* y_cfo(2*N+1:2*N+L))) / L;
+        % Phase offset estimation after CFO compensation
+        alpha_est = angle(sum(conj(x_payload) .* y_cfo(2*N+1:2*N+L))) / L;%%Make sure to skip training blocks
 
+        % Phase offset compensation
         y_comp = y_cfo .* exp(-1j*alpha_est);
 
+        
         [h_eq, d_min, error_min] = fir_eq(x, y_comp, Neq);
 
+        % Equalize received signal
         y_eq_full = conv(y_comp, h_eq);
 
+        % Remove equalizer delay
         y_eq = y_eq_full(d_min+1:d_min+length(x));
 
+        % Extract payload region
         idx = 2*N+1:2*N+L;
 
+        % Compute SNDR
         SNDR_temp(mc) = 10*log10(sum(abs(x_payload).^2) / sum(abs(y_eq(idx) - x_payload).^2));
 
     end
 
+    % Average SNDR over all Monte Carlo runs
     SNDR_avg(k) = mean(SNDR_temp);
 
 end
 
 figure;
 
+% Plot average SNDR versus repeated-block length N
 semilogx(N_vals, SNDR_avg, '-o', 'LineWidth', 1.5);
 
 grid on;
@@ -220,14 +236,15 @@ fprintf('\nRESULTS:\n');
 
 for k = 1:length(N_vals)
 
+    % Print SNDR results for each N
     fprintf('N = %4d | SNDR = %.2f dB\n', N_vals(k), SNDR_avg(k));
 
 end
 
 %% TASK 6.3 CFO and PO in the receiver
-clc;
-clear;
-close all;
+%clc;
+%clear;
+%close all;
 
 
 %% Parameters
@@ -274,8 +291,8 @@ c = 0.25*exp(1i*0.1*pi)*[1 zeros(1,15) 2.4 zeros(1,15) 1];
 
 %% Generate QAM symbols
 
-x1 = qammod(randi([0 Q-1],L1,1).',Q);
-x2 = qammod(randi([0 Q-1],L2,1).',Q);
+x1 = qammod(randi([0 Q-1],L1,1).',Q,'UnitAveragePower',true);
+x2 = qammod(randi([0 Q-1],L2,1).',Q,'UnitAveragePower',true);
 
 %% Pulse shaping filters
 

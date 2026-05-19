@@ -706,7 +706,7 @@ axis equal;
 xlabel('In-phase');
 ylabel('Quadrature');
 
-title('IQM alone, no compensation', 'FontSize', 6);
+title('IQM alone, no compensation', 'FontSize', 11);
 
 set(gca,'FontSize',12);
 
@@ -766,34 +766,6 @@ ylabel('Quadrature');
 title('All errors with SFM, compensated', 'FontSize', 6);
 
 set(gca,'FontSize',12);
-
-%% Spectrum plots
-
-figure;
-
-subplot(3,2,1);
-pwelch(res1.yrx_before_iqm_comp,[],[],[],fs,'centered');
-title('IQM alone before compensation');
-
-subplot(3,2,2);
-pwelch(res2.yrx_after_iqm_comp,[],[],[],fs,'centered');
-title('IQM alone after compensation');
-
-subplot(3,2,3);
-pwelch(res3.yrx_before_iqm_comp,[],[],[],fs,'centered');
-title('All errors before compensation');
-
-subplot(3,2,4);
-pwelch(res4.yrx_after_iqm_comp,[],[],[],fs,'centered');
-title('All errors after IQM compensation');
-
-subplot(3,2,5);
-pwelch(res5.yrx_after_sfm,[],[],[],fs,'centered');
-title('SFM alone');
-
-subplot(3,2,6);
-pwelch(res6.yrx_after_equalizer,[],[],[],fs,'centered');
-title('All errors with SFM after equalizer');
 
 %% Equalizer function
 
